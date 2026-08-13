@@ -11,12 +11,14 @@ sent to another service.
 - Removes a broad local list of analytics, advertising, referral, affiliate, and
   share parameters.
 - Preserves ordinary query parameters by default.
-- Offers a separate option to remove every query parameter.
-- Shows which parameter names were removed and copies the result to the clipboard.
+- Offers presets to restore the recommended cleanup or remove every query parameter.
+- Lets users review grouped parameter keys and tap to keep or remove them.
+- Preserves repeated values when a grouped parameter is restored.
+- Copies the customized result to the clipboard.
 
 The default list intentionally includes ambiguous referral keys such as `ref`,
-`source`, and `tag`. Keep the "remove every query parameter" option off when a link
-depends on other query values.
+`source`, and `tag`. The parameter review UI can restore any key that a destination
+needs.
 
 ## Local development
 

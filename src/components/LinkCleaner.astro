@@ -22,19 +22,10 @@
 		<p id="source-error" class="field__error" aria-live="polite" hidden></p>
 	</div>
 
-	<label class="mode-toggle" for="remove-all">
-		<input id="remove-all" type="checkbox" />
-		<span class="mode-toggle__control" aria-hidden="true"></span>
-		<span class="mode-toggle__copy">
-			<strong>Remove every query parameter</strong>
-			<small>Leave this off to preserve parameters that do not look like tracking.</small>
-		</span>
-	</label>
-
 	<section id="result-panel" class="result-panel" aria-labelledby="result-heading" hidden>
 		<div class="field__heading">
 			<label id="result-heading" for="cleaned-url">Cleaned link</label>
-			<span id="result-badge" class="result-badge">Ready to share</span>
+			<span id="result-badge" class="result-badge" aria-live="polite">Ready to share</span>
 		</div>
 
 		<textarea
@@ -42,7 +33,7 @@
 			class="url-field url-field--result"
 			rows="4"
 			readonly
-			aria-describedby="removal-summary copy-status"
+			aria-describedby="copy-status"
 		></textarea>
 
 		<button id="copy-button" class="copy-button" type="button" disabled>
@@ -53,16 +44,64 @@
 			<span id="copy-label">Copy cleaned link</span>
 		</button>
 
-		<div class="removal-report">
-			<p id="removal-summary" aria-live="polite"></p>
-			<ul id="removed-parameters" class="parameter-list" aria-label="Removed parameters"></ul>
-		</div>
+		<p id="no-parameters" class="parameter-empty" hidden>No query parameters found.</p>
+
+		<details id="parameter-review" class="parameter-review" hidden>
+			<summary>
+				<span class="parameter-review__title">Review parameters</span>
+				<span id="parameter-summary" class="parameter-review__summary" aria-live="polite"></span>
+				<svg viewBox="0 0 24 24" aria-hidden="true">
+					<path d="m8 10 4 4 4-4"></path>
+				</svg>
+			</summary>
+
+			<div class="parameter-review__body">
+				<div class="preset-toolbar">
+					<span class="selection-status">
+						Selection
+						<strong id="selection-status">Recommended</strong>
+					</span>
+					<div class="preset-actions" role="group" aria-label="Parameter selection presets">
+						<button
+							id="recommended-preset"
+							class="preset-button"
+							type="button"
+							aria-pressed="true">Recommended</button
+						>
+						<button
+							id="remove-all-preset"
+							class="preset-button"
+							type="button"
+							aria-pressed="false">Remove all</button
+						>
+					</div>
+				</div>
+
+				<p id="parameter-help" class="parameter-help">
+					Tap a parameter to keep or remove every value for that key.
+				</p>
+				<ul
+					id="parameter-list"
+					class="parameter-list"
+					aria-label="Query parameter removal choices"
+					aria-describedby="parameter-help"
+				></ul>
+			</div>
+		</details>
+
 		<p id="copy-status" class="copy-status" role="status" aria-live="polite"></p>
 	</section>
 </section>
 
 <script>
-	import { cleanUrl, type CleanMode } from '../lib/clean-url';
+	import {
+		analyzeUrl,
+		applyParameterSelection,
+		getPresetSelection,
+		type CleanPreset,
+		type SelectedQueryParameterGroup,
+		type UrlAnalysis,
+	} from '../lib/clean-url';
 
 	function requireElement<T extends Element>(
 		selector: string,
@@ -77,16 +116,23 @@
 	}
 
 	const sourceInput = requireElement('#source-url', HTMLTextAreaElement);
-	const removeAllInput = requireElement('#remove-all', HTMLInputElement);
 	const sourceError = requireElement('#source-error', HTMLParagraphElement);
 	const resultPanel = requireElement('#result-panel', HTMLElement);
 	const resultBadge = requireElement('#result-badge', HTMLElement);
 	const cleanedOutput = requireElement('#cleaned-url', HTMLTextAreaElement);
 	const copyButton = requireElement('#copy-button', HTMLButtonElement);
 	const copyLabel = requireElement('#copy-label', HTMLElement);
-	const removalSummary = requireElement('#removal-summary', HTMLParagraphElement);
-	const removedParameters = requireElement('#removed-parameters', HTMLUListElement);
+	const noParameters = requireElement('#no-parameters', HTMLParagraphElement);
+	const parameterReview = requireElement('#parameter-review', HTMLDetailsElement);
+	const parameterSummary = requireElement('#parameter-summary', HTMLElement);
+	const selectionStatus = requireElement('#selection-status', HTMLElement);
+	const recommendedPreset = requireElement('#recommended-preset', HTMLButtonElement);
+	const removeAllPreset = requireElement('#remove-all-preset', HTMLButtonElement);
+	const parameterList = requireElement('#parameter-list', HTMLUListElement);
 	const copyStatus = requireElement('#copy-status', HTMLParagraphElement);
+
+	let analysis: UrlAnalysis | null = null;
+	let removedParameterNames = new Set<string>();
 
 	function resetCopyState() {
 		copyButton.dataset.copied = 'false';
@@ -94,29 +140,109 @@
 		copyStatus.textContent = '';
 	}
 
-	function showRemovedParameters(parameterNames: string[]) {
-		const items = parameterNames.map((parameterName) => {
+	function selectionsMatch(left: ReadonlySet<string>, right: ReadonlySet<string>) {
+		return left.size === right.size && [...left].every((parameterName) => right.has(parameterName));
+	}
+
+	function showParameters(parameters: SelectedQueryParameterGroup[]) {
+		const items = parameters.map((parameter) => {
 			const item = document.createElement('li');
+			const button = document.createElement('button');
+			const state = document.createElement('span');
 			const code = document.createElement('code');
-			code.textContent = parameterName || '(unnamed)';
-			item.append(code);
+			const displayName = parameter.name || '(unnamed)';
+
+			button.type = 'button';
+			button.className = 'parameter-chip';
+			button.dataset.parameterName = parameter.normalizedName;
+			button.setAttribute('aria-pressed', String(parameter.removed));
+			button.setAttribute(
+				'aria-label',
+				`${displayName}, ${parameter.count} ${parameter.count === 1 ? 'value' : 'values'}, ${
+					parameter.removed ? 'removed. Activate to keep.' : 'kept. Activate to remove.'
+				}`,
+			);
+
+			state.className = 'parameter-chip__state';
+			state.textContent = parameter.removed ? 'Removed' : 'Kept';
+			code.textContent = displayName;
+			button.append(state, code);
+
+			if (parameter.count > 1) {
+				const count = document.createElement('span');
+				count.className = 'parameter-chip__count';
+				count.textContent = `x${parameter.count}`;
+				button.append(count);
+			}
+
+			item.append(button);
 			return item;
 		});
 
-		removedParameters.replaceChildren(...items);
+		parameterList.replaceChildren(...items);
 	}
 
-	function updateResult() {
-		resetCopyState();
+	function updatePresetState() {
+		if (!analysis) {
+			return;
+		}
 
-		const mode: CleanMode = removeAllInput.checked ? 'all' : 'tracking';
-		const result = cleanUrl(sourceInput.value, mode);
+		const recommendedSelection = getPresetSelection(analysis.parameters, 'tracking');
+		const allSelection = getPresetSelection(analysis.parameters, 'all');
+		const isRecommended = selectionsMatch(removedParameterNames, recommendedSelection);
+		const isRemoveAll = selectionsMatch(removedParameterNames, allSelection);
+
+		recommendedPreset.setAttribute('aria-pressed', String(isRecommended));
+		removeAllPreset.setAttribute('aria-pressed', String(isRemoveAll));
+		selectionStatus.textContent = isRecommended
+			? 'Recommended'
+			: isRemoveAll
+				? 'All removed'
+				: 'Custom';
+	}
+
+	function renderSelection() {
+		if (!analysis) {
+			return;
+		}
+
+		resetCopyState();
+		const result = applyParameterSelection(analysis, removedParameterNames);
+
+		cleanedOutput.value = result.url;
+		copyButton.disabled = false;
+
+		const removedNoun = result.removedParameterCount === 1 ? 'parameter' : 'parameters';
+		resultBadge.textContent =
+			result.removedParameterCount > 0
+				? `${result.removedParameterCount} ${removedNoun} removed`
+				: 'Already clean';
+
+		const hasParameters = analysis.parameterCount > 0;
+		noParameters.hidden = hasParameters;
+		parameterReview.hidden = !hasParameters;
+
+		if (hasParameters) {
+			parameterSummary.textContent =
+				`${result.removedParameterCount} removed, ${result.keptParameterCount} kept`;
+			showParameters(result.parameters);
+			updatePresetState();
+		} else {
+			parameterReview.open = false;
+			parameterList.replaceChildren();
+		}
+	}
+
+	function updateFromInput() {
+		const result = analyzeUrl(sourceInput.value);
 
 		if (!result.ok) {
+			analysis = null;
+			removedParameterNames.clear();
 			resultPanel.hidden = true;
 			cleanedOutput.value = '';
 			copyButton.disabled = true;
-			removedParameters.replaceChildren();
+			parameterList.replaceChildren();
 
 			const hasInput = result.code !== 'empty';
 			sourceError.hidden = !hasInput;
@@ -125,31 +251,49 @@
 			return;
 		}
 
+		analysis = result;
+		removedParameterNames = getPresetSelection(result.parameters, 'tracking');
 		sourceError.hidden = true;
 		sourceError.textContent = '';
 		sourceInput.removeAttribute('aria-invalid');
 		resultPanel.hidden = false;
-		cleanedOutput.value = result.url;
-		copyButton.disabled = false;
-
-		const noun = result.removedParameterCount === 1 ? 'parameter' : 'parameters';
-		if (result.removedParameterCount > 0) {
-			const kind = mode === 'all' ? 'query' : 'tracking';
-			removalSummary.textContent = `Removed ${result.removedParameterCount} ${kind} ${noun}:`;
-			resultBadge.textContent = `${result.removedParameterCount} removed`;
-		} else {
-			removalSummary.textContent =
-				mode === 'all'
-					? 'This link had no query parameters to remove.'
-					: 'No known tracking parameters were found.';
-			resultBadge.textContent = 'Already clean';
-		}
-
-		showRemovedParameters(result.removedParameters);
+		renderSelection();
 	}
 
-	sourceInput.addEventListener('input', updateResult);
-	removeAllInput.addEventListener('change', updateResult);
+	function applyPreset(preset: CleanPreset) {
+		if (!analysis) {
+			return;
+		}
+
+		removedParameterNames = getPresetSelection(analysis.parameters, preset);
+		if (preset === 'all') {
+			parameterReview.open = true;
+		}
+		renderSelection();
+	}
+
+	sourceInput.addEventListener('input', updateFromInput);
+	recommendedPreset.addEventListener('click', () => applyPreset('tracking'));
+	removeAllPreset.addEventListener('click', () => applyPreset('all'));
+
+	parameterList.addEventListener('click', (event) => {
+		if (!(event.target instanceof Element)) {
+			return;
+		}
+
+		const button = event.target.closest<HTMLButtonElement>('button[data-parameter-name]');
+		const parameterName = button?.dataset.parameterName;
+		if (parameterName === undefined) {
+			return;
+		}
+
+		if (removedParameterNames.has(parameterName)) {
+			removedParameterNames.delete(parameterName);
+		} else {
+			removedParameterNames.add(parameterName);
+		}
+		renderSelection();
+	});
 
 	copyButton.addEventListener('click', async () => {
 		const url = cleanedOutput.value;

@@ -1,25 +1,48 @@
 import { isTrackingParameter } from './tracking-parameters';
 
-export type CleanMode = 'tracking' | 'all';
+export type CleanPreset = 'tracking' | 'all';
 
-export type CleanUrlResult =
-	| {
-			ok: true;
-			url: string;
-			removedParameters: string[];
-			removedParameterCount: number;
-	  }
-	| {
-			ok: false;
-			code: 'empty' | 'invalid' | 'unsupported-protocol';
-			message: string;
-	  };
+export interface CleanUrlError {
+	ok: false;
+	code: 'empty' | 'invalid' | 'unsupported-protocol';
+	message: string;
+}
+
+export interface QueryParameterGroup {
+	name: string;
+	normalizedName: string;
+	count: number;
+	isTracking: boolean;
+}
+
+export interface SelectedQueryParameterGroup extends QueryParameterGroup {
+	removed: boolean;
+}
+
+export interface UrlAnalysis {
+	ok: true;
+	url: string;
+	parameters: QueryParameterGroup[];
+	parameterCount: number;
+}
+
+export interface CleanUrlSuccess {
+	ok: true;
+	url: string;
+	parameters: SelectedQueryParameterGroup[];
+	removedParameters: string[];
+	removedParameterCount: number;
+	keptParameterCount: number;
+}
+
+export type AnalyzeUrlResult = UrlAnalysis | CleanUrlError;
+export type CleanUrlResult = CleanUrlSuccess | CleanUrlError;
 
 const EXPLICIT_SCHEME = /^[a-z][a-z\d+.-]*:/i;
 const HTTP_SCHEME = /^https?:\/\//i;
 const HOST_WITH_PORT = /^(?:localhost|\[[^\]]+\]|[^/?#:\s]+):\d+(?:[/?#]|$)/i;
 
-function parseWebUrl(input: string): URL | CleanUrlResult {
+function parseWebUrl(input: string): URL | CleanUrlError {
 	const trimmedInput = input.trim();
 
 	if (!trimmedInput) {
@@ -66,40 +89,90 @@ function parseWebUrl(input: string): URL | CleanUrlResult {
 	}
 }
 
-export function cleanUrl(input: string, mode: CleanMode = 'tracking'): CleanUrlResult {
+export function analyzeUrl(input: string): AnalyzeUrlResult {
 	const parsedUrl = parseWebUrl(input);
 	if (!(parsedUrl instanceof URL)) {
 		return parsedUrl;
 	}
 
-	const keysToDelete = new Set<string>();
-	const removedParameterNames = new Map<string, string>();
-	let removedParameterCount = 0;
+	const parameterGroups = new Map<string, QueryParameterGroup>();
+	let parameterCount = 0;
 
 	for (const [parameterName] of parsedUrl.searchParams) {
-		if (mode === 'all' || isTrackingParameter(parameterName)) {
-			keysToDelete.add(parameterName);
-			removedParameterCount += 1;
+		parameterCount += 1;
+		const normalizedName = parameterName.toLowerCase();
+		const existingGroup = parameterGroups.get(normalizedName);
 
-			const normalizedName = parameterName.toLowerCase();
-			if (!removedParameterNames.has(normalizedName)) {
-				removedParameterNames.set(normalizedName, parameterName);
-			}
-		}
-	}
-
-	if (mode === 'all') {
-		parsedUrl.search = '';
-	} else {
-		for (const parameterName of keysToDelete) {
-			parsedUrl.searchParams.delete(parameterName);
+		if (existingGroup) {
+			existingGroup.count += 1;
+		} else {
+			parameterGroups.set(normalizedName, {
+				name: parameterName,
+				normalizedName,
+				count: 1,
+				isTracking: isTrackingParameter(parameterName),
+			});
 		}
 	}
 
 	return {
 		ok: true,
 		url: parsedUrl.toString(),
-		removedParameters: [...removedParameterNames.values()],
-		removedParameterCount,
+		parameters: [...parameterGroups.values()],
+		parameterCount,
 	};
+}
+
+export function getPresetSelection(
+	parameters: readonly QueryParameterGroup[],
+	preset: CleanPreset,
+): Set<string> {
+	return new Set(
+		parameters
+			.filter((parameter) => preset === 'all' || parameter.isTracking)
+			.map((parameter) => parameter.normalizedName),
+	);
+}
+
+export function applyParameterSelection(
+	analysis: UrlAnalysis,
+	removedParameterNames: ReadonlySet<string>,
+): CleanUrlSuccess {
+	const parsedUrl = new URL(analysis.url);
+	const originalEntries = [...parsedUrl.searchParams.entries()];
+	let removedParameterCount = 0;
+
+	parsedUrl.search = '';
+	for (const [parameterName, parameterValue] of originalEntries) {
+		if (removedParameterNames.has(parameterName.toLowerCase())) {
+			removedParameterCount += 1;
+		} else {
+			parsedUrl.searchParams.append(parameterName, parameterValue);
+		}
+	}
+
+	const parameters = analysis.parameters.map((parameter) => ({
+		...parameter,
+		removed: removedParameterNames.has(parameter.normalizedName),
+	}));
+
+	return {
+		ok: true,
+		url: parsedUrl.toString(),
+		parameters,
+		removedParameters: parameters
+			.filter((parameter) => parameter.removed)
+			.map((parameter) => parameter.name),
+		removedParameterCount,
+		keptParameterCount: analysis.parameterCount - removedParameterCount,
+	};
+}
+
+export function cleanUrl(input: string, preset: CleanPreset = 'tracking'): CleanUrlResult {
+	const analysis = analyzeUrl(input);
+	if (!analysis.ok) {
+		return analysis;
+	}
+
+	return applyParameterSelection(analysis, getPresetSelection(analysis.parameters, preset));
 }
