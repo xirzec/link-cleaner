@@ -1,0 +1,180 @@
+<section class="cleaner-card" aria-labelledby="cleaner-heading">
+	<h2 id="cleaner-heading" class="visually-hidden">Clean a link</h2>
+
+	<div class="field">
+		<div class="field__heading">
+			<label for="source-url">Link to clean</label>
+			<span>Paste any web link</span>
+		</div>
+		<textarea
+			id="source-url"
+			class="url-field"
+			rows="4"
+			placeholder="https://example.com/article?utm_source=newsletter"
+			aria-describedby="source-hint source-error"
+			autocomplete="off"
+			autocapitalize="off"
+			spellcheck="false"
+		></textarea>
+		<p id="source-hint" class="field__hint">
+			Bare domains work too. We will add <code>https://</code> for you.
+		</p>
+		<p id="source-error" class="field__error" aria-live="polite" hidden></p>
+	</div>
+
+	<label class="mode-toggle" for="remove-all">
+		<input id="remove-all" type="checkbox" />
+		<span class="mode-toggle__control" aria-hidden="true"></span>
+		<span class="mode-toggle__copy">
+			<strong>Remove every query parameter</strong>
+			<small>Leave this off to preserve parameters that do not look like tracking.</small>
+		</span>
+	</label>
+
+	<section id="result-panel" class="result-panel" aria-labelledby="result-heading" hidden>
+		<div class="field__heading">
+			<label id="result-heading" for="cleaned-url">Cleaned link</label>
+			<span id="result-badge" class="result-badge">Ready to share</span>
+		</div>
+
+		<textarea
+			id="cleaned-url"
+			class="url-field url-field--result"
+			rows="4"
+			readonly
+			aria-describedby="removal-summary copy-status"
+		></textarea>
+
+		<button id="copy-button" class="copy-button" type="button" disabled>
+			<svg viewBox="0 0 24 24" aria-hidden="true">
+				<rect x="8" y="8" width="11" height="11" rx="2"></rect>
+				<path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
+			</svg>
+			<span id="copy-label">Copy cleaned link</span>
+		</button>
+
+		<div class="removal-report">
+			<p id="removal-summary" aria-live="polite"></p>
+			<ul id="removed-parameters" class="parameter-list" aria-label="Removed parameters"></ul>
+		</div>
+		<p id="copy-status" class="copy-status" role="status" aria-live="polite"></p>
+	</section>
+</section>
+
+<script>
+	import { cleanUrl, type CleanMode } from '../lib/clean-url';
+
+	function requireElement<T extends Element>(
+		selector: string,
+		elementType: new () => T,
+	): T {
+		const element = document.querySelector(selector);
+		if (!(element instanceof elementType)) {
+			throw new Error(`Link Cleaner could not initialize ${selector}.`);
+		}
+
+		return element;
+	}
+
+	const sourceInput = requireElement('#source-url', HTMLTextAreaElement);
+	const removeAllInput = requireElement('#remove-all', HTMLInputElement);
+	const sourceError = requireElement('#source-error', HTMLParagraphElement);
+	const resultPanel = requireElement('#result-panel', HTMLElement);
+	const resultBadge = requireElement('#result-badge', HTMLElement);
+	const cleanedOutput = requireElement('#cleaned-url', HTMLTextAreaElement);
+	const copyButton = requireElement('#copy-button', HTMLButtonElement);
+	const copyLabel = requireElement('#copy-label', HTMLElement);
+	const removalSummary = requireElement('#removal-summary', HTMLParagraphElement);
+	const removedParameters = requireElement('#removed-parameters', HTMLUListElement);
+	const copyStatus = requireElement('#copy-status', HTMLParagraphElement);
+
+	function resetCopyState() {
+		copyButton.dataset.copied = 'false';
+		copyLabel.textContent = 'Copy cleaned link';
+		copyStatus.textContent = '';
+	}
+
+	function showRemovedParameters(parameterNames: string[]) {
+		const items = parameterNames.map((parameterName) => {
+			const item = document.createElement('li');
+			const code = document.createElement('code');
+			code.textContent = parameterName || '(unnamed)';
+			item.append(code);
+			return item;
+		});
+
+		removedParameters.replaceChildren(...items);
+	}
+
+	function updateResult() {
+		resetCopyState();
+
+		const mode: CleanMode = removeAllInput.checked ? 'all' : 'tracking';
+		const result = cleanUrl(sourceInput.value, mode);
+
+		if (!result.ok) {
+			resultPanel.hidden = true;
+			cleanedOutput.value = '';
+			copyButton.disabled = true;
+			removedParameters.replaceChildren();
+
+			const hasInput = result.code !== 'empty';
+			sourceError.hidden = !hasInput;
+			sourceError.textContent = hasInput ? result.message : '';
+			sourceInput.toggleAttribute('aria-invalid', hasInput);
+			return;
+		}
+
+		sourceError.hidden = true;
+		sourceError.textContent = '';
+		sourceInput.removeAttribute('aria-invalid');
+		resultPanel.hidden = false;
+		cleanedOutput.value = result.url;
+		copyButton.disabled = false;
+
+		const noun = result.removedParameterCount === 1 ? 'parameter' : 'parameters';
+		if (result.removedParameterCount > 0) {
+			const kind = mode === 'all' ? 'query' : 'tracking';
+			removalSummary.textContent = `Removed ${result.removedParameterCount} ${kind} ${noun}:`;
+			resultBadge.textContent = `${result.removedParameterCount} removed`;
+		} else {
+			removalSummary.textContent =
+				mode === 'all'
+					? 'This link had no query parameters to remove.'
+					: 'No known tracking parameters were found.';
+			resultBadge.textContent = 'Already clean';
+		}
+
+		showRemovedParameters(result.removedParameters);
+	}
+
+	sourceInput.addEventListener('input', updateResult);
+	removeAllInput.addEventListener('change', updateResult);
+
+	copyButton.addEventListener('click', async () => {
+		const url = cleanedOutput.value;
+		if (!url) {
+			copyStatus.textContent = 'There is no cleaned link to copy.';
+			return;
+		}
+
+		if (!navigator.clipboard) {
+			cleanedOutput.focus();
+			cleanedOutput.select();
+			copyStatus.textContent = 'Clipboard access is unavailable. The cleaned link is selected for you.';
+			return;
+		}
+
+		try {
+			await navigator.clipboard.writeText(url);
+			copyButton.dataset.copied = 'true';
+			copyLabel.textContent = 'Copied';
+			copyStatus.textContent = 'Cleaned link copied to your clipboard.';
+		} catch (error) {
+			console.error('Unable to copy the cleaned link.', error);
+			cleanedOutput.focus();
+			cleanedOutput.select();
+			copyStatus.textContent = 'Copy failed. The cleaned link is selected so you can copy it manually.';
+		}
+	});
+</script>
