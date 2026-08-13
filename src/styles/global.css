@@ -155,7 +155,7 @@ h1 span {
 
 .field__heading {
 	display: flex;
-	align-items: baseline;
+	align-items: center;
 	justify-content: space-between;
 	gap: 1rem;
 	margin-bottom: 0.6rem;
@@ -166,9 +166,53 @@ h1 span {
 	letter-spacing: -0.015em;
 }
 
-.field__heading > span:not(.result-badge) {
-	color: var(--text-muted);
-	font-size: 0.78rem;
+.paste-button {
+	display: inline-flex;
+	min-height: 2.75rem;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
+	padding: 0.5rem 0.75rem;
+	border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+	border-radius: 0.65rem;
+	color: var(--accent-text);
+	background: var(--accent-soft);
+	font-size: 0.8rem;
+	font-weight: 750;
+	cursor: pointer;
+	transition:
+		border-color 150ms ease,
+		background 150ms ease,
+		transform 150ms ease;
+}
+
+.paste-button:hover {
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent-soft) 75%, var(--surface-strong));
+	transform: translateY(-1px);
+}
+
+.paste-button:active {
+	transform: translateY(0);
+}
+
+.paste-button:focus-visible {
+	outline: 3px solid color-mix(in srgb, var(--focus) 25%, transparent);
+	outline-offset: 2px;
+}
+
+.paste-button[data-pasted="true"] {
+	color: #ffffff;
+	background: var(--accent);
+}
+
+.paste-button svg {
+	width: 1rem;
+	fill: none;
+	stroke: currentColor;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 1.8;
 }
 
 .url-field {

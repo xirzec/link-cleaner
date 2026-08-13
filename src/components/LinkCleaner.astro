@@ -4,7 +4,13 @@
 	<div class="field">
 		<div class="field__heading">
 			<label for="source-url">Link to clean</label>
-			<span>Paste any web link</span>
+			<button id="paste-button" class="paste-button" type="button">
+				<svg viewBox="0 0 24 24" aria-hidden="true">
+					<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"></path>
+					<rect x="9" y="3" width="6" height="4" rx="1"></rect>
+				</svg>
+				<span id="paste-label">Paste</span>
+			</button>
 		</div>
 		<textarea
 			id="source-url"
@@ -117,6 +123,8 @@
 
 	const sourceInput = requireElement('#source-url', HTMLTextAreaElement);
 	const sourceError = requireElement('#source-error', HTMLParagraphElement);
+	const pasteButton = requireElement('#paste-button', HTMLButtonElement);
+	const pasteLabel = requireElement('#paste-label', HTMLElement);
 	const resultPanel = requireElement('#result-panel', HTMLElement);
 	const resultBadge = requireElement('#result-badge', HTMLElement);
 	const cleanedOutput = requireElement('#cleaned-url', HTMLTextAreaElement);
@@ -138,6 +146,11 @@
 		copyButton.dataset.copied = 'false';
 		copyLabel.textContent = 'Copy cleaned link';
 		copyStatus.textContent = '';
+	}
+
+	function resetPasteState() {
+		pasteButton.dataset.pasted = 'false';
+		pasteLabel.textContent = 'Paste';
 	}
 
 	function selectionsMatch(left: ReadonlySet<string>, right: ReadonlySet<string>) {
@@ -272,7 +285,48 @@
 		renderSelection();
 	}
 
-	sourceInput.addEventListener('input', updateFromInput);
+	sourceInput.addEventListener('input', () => {
+		resetPasteState();
+		updateFromInput();
+	});
+
+	pasteButton.addEventListener('click', async () => {
+		resetPasteState();
+		sourceError.hidden = true;
+		sourceError.textContent = '';
+		sourceInput.removeAttribute('aria-invalid');
+
+		if (!navigator.clipboard || typeof navigator.clipboard.readText !== 'function') {
+			sourceError.hidden = false;
+			sourceError.textContent =
+				'Clipboard access is unavailable in this browser. You can still paste into the field manually.';
+			sourceInput.focus();
+			return;
+		}
+
+		try {
+			const clipboardText = await navigator.clipboard.readText();
+			if (!clipboardText.trim()) {
+				sourceError.hidden = false;
+				sourceError.textContent = 'Your clipboard does not contain a link.';
+				sourceInput.focus();
+				return;
+			}
+
+			sourceInput.value = clipboardText;
+			updateFromInput();
+			pasteButton.dataset.pasted = 'true';
+			pasteLabel.textContent = 'Pasted';
+			sourceInput.focus();
+		} catch (error) {
+			console.error('Unable to read a link from the clipboard.', error);
+			sourceError.hidden = false;
+			sourceError.textContent =
+				'Clipboard permission was denied. You can still paste into the field manually.';
+			sourceInput.focus();
+		}
+	});
+
 	recommendedPreset.addEventListener('click', () => applyPreset('tracking'));
 	removeAllPreset.addEventListener('click', () => applyPreset('all'));
 
