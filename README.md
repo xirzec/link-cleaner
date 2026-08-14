@@ -4,6 +4,8 @@ Link Cleaner is a small Astro app that removes tracking parameters from links be
 you share them. It runs entirely in the browser: links are not uploaded, stored, or
 sent to another service.
 
+Use it at [xirzec.github.io/link-cleaner](https://xirzec.github.io/link-cleaner/).
+
 ## Features
 
 - Cleans links immediately as you type or paste.
@@ -26,7 +28,7 @@ needs.
 Node.js 22.12 or newer is required.
 
 ```sh
-npm install
+npm ci
 npm run dev
 ```
 
@@ -45,8 +47,9 @@ such as `is`, `s`, and `t`.
 
 ## GitHub Pages
 
-The workflow in `.github/workflows/deploy.yml` validates and deploys the site when
-changes reach `main`, and it can also be run manually.
+The workflow in `.github/workflows/ci.yml` validates pull requests. The deployment
+workflow validates again and deploys the site when changes reach `main`, and it can
+also be run manually.
 
 1. Push this project to a GitHub repository whose default branch is `main`.
 2. Open the repository's **Settings -> Pages**.
@@ -55,3 +58,12 @@ changes reach `main`, and it can also be run manually.
 The Astro configuration derives the owner and repository path from
 `GITHUB_REPOSITORY`, so a project site is built for
 `https://<owner>.github.io/<repository>/` without hard-coded account details.
+
+## Security
+
+Report vulnerabilities privately as described in the
+[security policy](.github/SECURITY.md).
+
+## License
+
+Link Cleaner is available under the [MIT License](LICENSE).
