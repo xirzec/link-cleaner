@@ -3,6 +3,7 @@
   "type": "module",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "description": "A private, browser-only tool for removing tracking parameters from shared links.",
   "engines": {
     "node": ">=22.12.0"

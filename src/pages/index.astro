@@ -6,6 +6,13 @@ const baseUrl = import.meta.env.BASE_URL.endsWith('/')
 	? import.meta.env.BASE_URL
 	: `${import.meta.env.BASE_URL}/`;
 const faviconUrl = `${baseUrl}favicon.svg`;
+const pageTitle = 'Link Cleaner - Share links, not trackers';
+const pageDescription =
+	'Remove tracking parameters from links before you share them. Everything stays in your browser.';
+const socialDescription =
+	'Share the link, not the tracking. Clean URLs privately in your browser.';
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url).toString();
+const socialImageUrl = new URL(`${baseUrl}social-preview.png`, Astro.site ?? Astro.url).toString();
 ---
 
 <!doctype html>
@@ -13,21 +20,34 @@ const faviconUrl = `${baseUrl}favicon.svg`;
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href={faviconUrl} />
+		<link rel="canonical" href={canonicalUrl} />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="generator" content={Astro.generator} />
-		<meta
-			name="description"
-			content="Remove tracking parameters from links before you share them. Everything stays in your browser."
-		/>
+		<meta name="description" content={pageDescription} />
 		<meta name="theme-color" content="#f4f8f7" media="(prefers-color-scheme: light)" />
 		<meta name="theme-color" content="#0b1414" media="(prefers-color-scheme: dark)" />
-		<meta property="og:title" content="Link Cleaner" />
-		<meta
-			property="og:description"
-			content="Share the link, not the tracking. Clean URLs privately in your browser."
-		/>
+		<meta property="og:site_name" content="Link Cleaner" />
+		<meta property="og:title" content={pageTitle} />
+		<meta property="og:description" content={socialDescription} />
 		<meta property="og:type" content="website" />
-		<title>Link Cleaner - Share links, not trackers</title>
+		<meta property="og:url" content={canonicalUrl} />
+		<meta property="og:image" content={socialImageUrl} />
+		<meta property="og:image:type" content="image/png" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta
+			property="og:image:alt"
+			content="Link Cleaner - Share links, not trackers. Private and browser-only."
+		/>
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content={pageTitle} />
+		<meta name="twitter:description" content={socialDescription} />
+		<meta name="twitter:image" content={socialImageUrl} />
+		<meta
+			name="twitter:image:alt"
+			content="Link Cleaner - Share links, not trackers. Private and browser-only."
+		/>
+		<title>{pageTitle}</title>
 	</head>
 	<body>
 		<div class="page-glow page-glow--one" aria-hidden="true"></div>
