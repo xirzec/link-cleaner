@@ -110,7 +110,7 @@ export function analyzeUrl(input: string): AnalyzeUrlResult {
 				name: parameterName,
 				normalizedName,
 				count: 1,
-				isTracking: isTrackingParameter(parameterName),
+				isTracking: isTrackingParameter(parameterName, parsedUrl.hostname),
 			});
 		}
 	}

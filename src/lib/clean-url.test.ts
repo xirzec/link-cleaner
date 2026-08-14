@@ -87,6 +87,32 @@ describe('cleanUrl', () => {
 		});
 	});
 
+	it('removes current Instagram share identifiers', () => {
+		expect(
+			cleanUrl(
+				'https://www.instagram.com/reel/example/?igsh=abc123&igshid=older&utm_source=ig_web_copy_link',
+			),
+		).toMatchObject({
+			ok: true,
+			url: 'https://www.instagram.com/reel/example/',
+			removedParameters: ['igsh', 'igshid', 'utm_source'],
+			removedParameterCount: 3,
+		});
+	});
+
+	it('removes YouTube is only from youtu.be links', () => {
+		expect(cleanUrl('https://youtu.be/example?is=tracking&si=share&t=45')).toMatchObject({
+			ok: true,
+			url: 'https://youtu.be/example?t=45',
+			removedParameters: ['is', 'si'],
+		});
+		expect(cleanUrl('https://example.com/?is=important')).toMatchObject({
+			ok: true,
+			url: 'https://example.com/?is=important',
+			removedParameters: [],
+		});
+	});
+
 	it('returns an empty state without treating it as malformed', () => {
 		expect(cleanUrl('   ')).toEqual({
 			ok: false,
@@ -185,12 +211,50 @@ describe('parameter selection', () => {
 });
 
 describe('isTrackingParameter', () => {
-	it.each(['utm_campaign', 'PK_SOURCE', 'hsa_acc', 'elqTrackId', 'trkInfo'])(
+	it.each([
+		'utm_campaign',
+		'PK_SOURCE',
+		'hsa_acc',
+		'elqTrackId',
+		'trkInfo',
+		'action_object_map',
+		'igsh',
+		'rdt_cid',
+		'snapcid',
+		'li_source',
+		'sp_cid',
+		'dlsi',
+	])(
 		'identifies the %s tracking prefix',
 		(parameterName) => {
 			expect(isTrackingParameter(parameterName)).toBe(true);
 		},
 	);
+
+	it.each([
+		['is', 'youtu.be'],
+		['_t', 'www.tiktok.com'],
+		['s', 'mobile.twitter.com'],
+		['t', 'x.com'],
+		['entry_point', 'www.reddit.com'],
+		['origin', 'linkedin.com'],
+		['xmt', 'www.threads.net'],
+		['pi', 'open.spotify.com'],
+	])('identifies %s as tracking on %s', (parameterName, hostname) => {
+		expect(isTrackingParameter(parameterName, hostname)).toBe(true);
+	});
+
+	it.each(['is', '_t', 's', 't', 'entry_point', 'origin', 'pi', 'user_id'])(
+		'preserves ambiguous %s outside its social host',
+		(parameterName) => {
+			expect(isTrackingParameter(parameterName, 'example.com')).toBe(false);
+		},
+	);
+
+	it('does not match lookalike hostnames', () => {
+		expect(isTrackingParameter('is', 'notyoutu.be.example.com')).toBe(false);
+		expect(isTrackingParameter('t', 'notx.com')).toBe(false);
+	});
 
 	it('does not classify ordinary functional parameters as tracking', () => {
 		expect(isTrackingParameter('article')).toBe(false);

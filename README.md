@@ -39,7 +39,9 @@ npm run dev
 | `npm run validate` | Run tests, checks, and the production build |
 
 Tracking rules live in `src/lib/tracking-parameters.ts`. Add or remove entries there
-and update `src/lib/clean-url.test.ts` when the policy changes.
+and update `src/lib/clean-url.test.ts` when the policy changes. Ambiguous short social
+parameters are matched only on their platform's hostname so ordinary links keep keys
+such as `is`, `s`, and `t`.
 
 ## GitHub Pages
 
