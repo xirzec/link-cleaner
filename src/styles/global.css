@@ -166,6 +166,12 @@ h1 span {
 	letter-spacing: -0.015em;
 }
 
+.input-actions {
+	display: flex;
+	gap: 0.4rem;
+}
+
+.clear-button,
 .paste-button {
 	display: inline-flex;
 	min-height: 2.75rem;
@@ -173,10 +179,8 @@ h1 span {
 	justify-content: center;
 	gap: 0.4rem;
 	padding: 0.5rem 0.75rem;
-	border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+	border: 1px solid var(--border);
 	border-radius: 0.65rem;
-	color: var(--accent-text);
-	background: var(--accent-soft);
 	font-size: 0.8rem;
 	font-weight: 750;
 	cursor: pointer;
@@ -186,19 +190,44 @@ h1 span {
 		transform 150ms ease;
 }
 
+.clear-button {
+	color: var(--text-muted);
+	background: var(--surface-strong);
+}
+
+.paste-button {
+	border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+	color: var(--accent-text);
+	background: var(--accent-soft);
+}
+
+.clear-button:hover:not(:disabled) {
+	border-color: color-mix(in srgb, var(--border) 40%, var(--text-muted));
+	color: var(--text);
+	transform: translateY(-1px);
+}
+
 .paste-button:hover {
 	border-color: var(--accent);
 	background: color-mix(in srgb, var(--accent-soft) 75%, var(--surface-strong));
 	transform: translateY(-1px);
 }
 
+.clear-button:active,
 .paste-button:active {
 	transform: translateY(0);
 }
 
+.clear-button:focus-visible,
 .paste-button:focus-visible {
 	outline: 3px solid color-mix(in srgb, var(--focus) 25%, transparent);
 	outline-offset: 2px;
+}
+
+.clear-button:disabled {
+	cursor: not-allowed;
+	opacity: 0.45;
+	transform: none;
 }
 
 .paste-button[data-pasted="true"] {
@@ -206,6 +235,7 @@ h1 span {
 	background: var(--accent);
 }
 
+.clear-button svg,
 .paste-button svg {
 	width: 1rem;
 	fill: none;

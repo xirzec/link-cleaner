@@ -7,7 +7,7 @@ sent to another service.
 ## Features
 
 - Cleans links immediately as you type or paste.
-- Pastes links from the clipboard with a mobile-friendly button.
+- Pastes links from the clipboard or clears the current link with mobile-friendly buttons.
 - Accepts HTTP(S) links and bare domains.
 - Removes a broad local list of analytics, advertising, referral, affiliate, and
   share parameters.
